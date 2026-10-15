@@ -1,0 +1,29 @@
+# Maven and Java build output
+**/target/
+**/build/
+**/out/
+Rating/rating_service/bin/
+*.class
+*.jar
+*.war
+
+# IDE and editor state
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.iml
+.classpath
+.project
+.settings/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.local
+
+# Logs and temporary files
+*.log
+logs/
+.DS_Store
+Thumbs.db
