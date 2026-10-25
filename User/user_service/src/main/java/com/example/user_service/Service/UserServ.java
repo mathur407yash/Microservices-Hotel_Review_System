@@ -1,8 +1,6 @@
 package com.example.user_service.Service;
 
 import com.example.user_service.Model.user;
-import com.example.user_service.Client.HotelClient;
-import com.example.user_service.Client.RatingClient;
 import com.example.user_service.Dto.HotelResponse;
 import com.example.user_service.Dto.RatingResponse;
 import com.example.user_service.Dto.RatingWithHotelResponse;
@@ -16,13 +14,11 @@ import java.util.List;
 public class UserServ {
 
 private final UserRepo userRepo;
-private final RatingClient ratingClient;
-private final HotelClient hotelClient;
+private final UserServiceDependencies userServiceDependencies;
 
-public UserServ(UserRepo userRepo, RatingClient ratingClient, HotelClient hotelClient) {
+public UserServ(UserRepo userRepo, UserServiceDependencies userServiceDependencies) {
     this.userRepo = userRepo;
-    this.ratingClient = ratingClient;
-    this.hotelClient = hotelClient;
+    this.userServiceDependencies = userServiceDependencies;
 }
 public List<user> getAllUsers() {
     // Logic to retrieve all users from the database
@@ -55,16 +51,15 @@ public user getUserById(String Userid) {
 
 public UserWithRatingsResponse getUserWithRatings(String userId) {
     user foundUser = getUserById(userId);
-    List<RatingWithHotelResponse> ratings = ratingClient.getRatingsByUserId(userId).stream()
+    List<RatingWithHotelResponse> ratings = userServiceDependencies.getRatingsByUserId(userId).stream()
             .map(this::attachHotelDetails)
             .toList();
     return new UserWithRatingsResponse(foundUser, ratings);
 }
 
 private RatingWithHotelResponse attachHotelDetails(RatingResponse rating) {
-    HotelResponse hotel = hotelClient.getHotelById(rating.hotelId());
+    HotelResponse hotel = userServiceDependencies.getHotelById(rating.hotelId());
     return new RatingWithHotelResponse(rating, hotel);
 }
 }
-
 

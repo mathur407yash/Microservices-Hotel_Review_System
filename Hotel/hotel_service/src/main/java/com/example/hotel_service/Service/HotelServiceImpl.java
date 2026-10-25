@@ -1,7 +1,6 @@
 package com.example.hotel_service.Service;
 
 import com.example.hotel_service.Exception.HotelNotFoundException;
-import com.example.hotel_service.Client.RatingClient;
 import com.example.hotel_service.Dto.HotelWithRatingsResponse;
 import com.example.hotel_service.Model.Hotel;
 import com.example.hotel_service.Repository.HotelRepository;
@@ -14,11 +13,11 @@ import java.util.UUID;
 public class HotelServiceImpl implements HotelService {
 
     private final HotelRepository hotelRepository;
-    private final RatingClient ratingClient;
+    private final HotelServiceDependencies hotelServiceDependencies;
 
-    public HotelServiceImpl(HotelRepository hotelRepository, RatingClient ratingClient) {
+    public HotelServiceImpl(HotelRepository hotelRepository, HotelServiceDependencies hotelServiceDependencies) {
         this.hotelRepository = hotelRepository;
-        this.ratingClient = ratingClient;
+        this.hotelServiceDependencies = hotelServiceDependencies;
     }
 
     @Override
@@ -43,7 +42,7 @@ public class HotelServiceImpl implements HotelService {
     @Override
     public HotelWithRatingsResponse getHotelWithRatings(String hotelId) {
         Hotel hotel = getHotelByHotelId(hotelId);
-        return new HotelWithRatingsResponse(hotel, ratingClient.getRatingsByHotelId(hotelId));
+        return new HotelWithRatingsResponse(hotel, hotelServiceDependencies.getRatingsByHotelId(hotelId));
     }
 
     @Override
