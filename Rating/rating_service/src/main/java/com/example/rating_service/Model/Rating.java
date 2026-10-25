@@ -2,11 +2,13 @@ package com.example.rating_service.Model;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 @Entity
 public class Rating {
 
     @Id
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
     private String ratingId;
     private String hotelId;
     private String userid;

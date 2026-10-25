@@ -5,6 +5,8 @@ import com.example.hotel_service.Dto.HotelWithRatingsResponse;
 import com.example.hotel_service.Model.Hotel;
 import com.example.hotel_service.Repository.HotelRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 
 import java.util.List;
 import java.util.UUID;
@@ -21,16 +23,22 @@ public class HotelServiceImpl implements HotelService {
     }
 
     @Override
-    public Hotel createHotel(Hotel hotel) {
+    public Hotel createHotel(Hotel hotel, String ownerSubject) {
         if (hotel.getHotelId() == null || hotel.getHotelId().isBlank()) {
             hotel.setHotelId(UUID.randomUUID().toString());
         }
+        hotel.setOwnerSubject(ownerSubject);
         return hotelRepository.save(hotel);
     }
 
     @Override
     public List<Hotel> getAllHotels() {
         return hotelRepository.findAll();
+    }
+
+    @Override
+    public List<Hotel> getHotelsByOwnerSubject(String ownerSubject) {
+        return hotelRepository.findByOwnerSubject(ownerSubject);
     }
 
     @Override
@@ -46,10 +54,11 @@ public class HotelServiceImpl implements HotelService {
     }
 
     @Override
-    public void deleteHotelByHotelId(String hotelId) {
-        if (!hotelRepository.existsById(hotelId)) {
-            throw new HotelNotFoundException(hotelId);
+    public void deleteHotelByHotelId(String hotelId, String ownerSubject) {
+        Hotel hotel = getHotelByHotelId(hotelId);
+        if (!ownerSubject.equals(hotel.getOwnerSubject())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only manage hotels you own");
         }
-        hotelRepository.deleteById(hotelId);
+        hotelRepository.delete(hotel);
     }
 }

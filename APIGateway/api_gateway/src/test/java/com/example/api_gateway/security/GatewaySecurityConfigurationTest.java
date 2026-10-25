@@ -23,10 +23,14 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class GatewaySecurityConfigurationTest {
 
@@ -43,7 +47,7 @@ class GatewaySecurityConfigurationTest {
 		JwtDecoder decoder = configuration.jwtDecoder(publicKey, "https://hotel-review-system", "hotel-review-api");
 		ObjectMapper objectMapper = new ObjectMapper();
 		AuthenticationSuccessHandler successHandler = configuration.googleLoginSuccessHandler(
-				encoder, objectMapper, "https://hotel-review-system", "hotel-review-api", 900);
+				encoder, objectMapper, "http://localhost:5173", "https://hotel-review-system", "hotel-review-api", 900);
 
 		Instant now = Instant.now();
 		OidcIdToken idToken = new OidcIdToken(
@@ -57,26 +61,34 @@ class GatewaySecurityConfigurationTest {
 						"iat", now,
 						"exp", now.plusSeconds(3600),
 						"email", "user@example.com",
-						"name", "Example User"));
+						"name", "</script><script>alert(1)</script>"));
 		DefaultOidcUser oidcUser = new DefaultOidcUser(
 				List.of(new SimpleGrantedAuthority("ROLE_USER")), idToken);
 		OAuth2AuthenticationToken authentication = new OAuth2AuthenticationToken(
 				oidcUser, oidcUser.getAuthorities(), "google");
+		MockHttpServletRequest request = new MockHttpServletRequest();
+		request.getSession(true).setAttribute(RoleAwareAuthorizationRequestResolver.PENDING_ROLE_SESSION_ATTRIBUTE, "USER");
 		MockHttpServletResponse response = new MockHttpServletResponse();
 
-		successHandler.onAuthenticationSuccess(new MockHttpServletRequest(), response, authentication);
+		successHandler.onAuthenticationSuccess(request, response, authentication);
 
-		JsonNode body = objectMapper.readTree(response.getContentAsByteArray());
+		Matcher payloadMatcher = Pattern.compile("const payload = (\\{[^\\n]+});").matcher(response.getContentAsString());
+		assertTrue(payloadMatcher.find());
+		JsonNode body = objectMapper.readTree(payloadMatcher.group(1));
+		assertFalse(response.getContentAsString().contains("</script><script>alert(1)</script>"));
 		assertEquals(200, response.getStatus());
-		assertEquals("Bearer", body.get("token_type").asText());
-		assertEquals(900, body.get("expires_in").asInt());
+		assertEquals("Bearer", body.get("tokenType").asText());
+		assertEquals("USER", body.get("role").asText());
+		assertEquals(900, body.get("expiresIn").asInt());
 		assertEquals("no-store", response.getHeader("Cache-Control"));
 
-		Jwt decoded = decoder.decode(body.get("access_token").asText());
+		Jwt decoded = decoder.decode(body.get("accessToken").asText());
 		assertEquals("https://hotel-review-system", decoded.getIssuer().toString());
 		assertEquals("hotel-review-api", decoded.getAudience().get(0));
 		assertEquals("google-user-123", decoded.getSubject());
+		assertEquals(List.of("USER"), decoded.getClaimAsStringList("roles"));
 		assertEquals("user@example.com", decoded.getClaimAsString("email"));
+		assertEquals("</script><script>alert(1)</script>", decoded.getClaimAsString("name"));
 		assertNotNull(decoded.getExpiresAt());
 		assertEquals(900, decoded.getExpiresAt().getEpochSecond() - decoded.getIssuedAt().getEpochSecond());
 

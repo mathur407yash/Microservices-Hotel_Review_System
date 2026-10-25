@@ -12,6 +12,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
@@ -20,6 +21,8 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
@@ -29,8 +32,15 @@ public class RatingSecurityConfiguration {
 	SecurityFilterChain ratingSecurityFilterChain(HttpSecurity http, JwtDecoder jwtDecoder) throws Exception {
 		http.csrf(AbstractHttpConfigurer::disable)
 				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-				.authorizeHttpRequests(authorize -> authorize.anyRequest().authenticated())
-				.oauth2ResourceServer(resourceServer -> resourceServer.jwt(jwt -> jwt.decoder(jwtDecoder)));
+				.authorizeHttpRequests(authorize -> authorize
+						.requestMatchers(HttpMethod.POST, "/ratings/**").hasRole("USER")
+						.requestMatchers(HttpMethod.DELETE, "/ratings/**").hasRole("USER")
+						.requestMatchers(HttpMethod.GET, "/ratings/user/**").hasRole("USER")
+						.requestMatchers(HttpMethod.GET, "/ratings/**").hasAnyRole("USER", "HOTEL_OWNER")
+						.anyRequest().authenticated())
+				.oauth2ResourceServer(resourceServer -> resourceServer.jwt(jwt -> jwt
+						.decoder(jwtDecoder)
+						.jwtAuthenticationConverter(jwtAuthenticationConverter())));
 		return http.build();
 	}
 
@@ -47,6 +57,15 @@ public class RatingSecurityConfiguration {
 		decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
 				JwtValidators.createDefaultWithIssuer(issuer), audienceValidator));
 		return decoder;
+	}
+
+	private static JwtAuthenticationConverter jwtAuthenticationConverter() {
+		JwtGrantedAuthoritiesConverter authoritiesConverter = new JwtGrantedAuthoritiesConverter();
+		authoritiesConverter.setAuthoritiesClaimName("roles");
+		authoritiesConverter.setAuthorityPrefix("ROLE_");
+		JwtAuthenticationConverter authenticationConverter = new JwtAuthenticationConverter();
+		authenticationConverter.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
+		return authenticationConverter;
 	}
 
 	private static RSAPublicKey readPublicKey(String configuredKey) {

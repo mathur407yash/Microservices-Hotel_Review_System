@@ -2,6 +2,8 @@
 **/target/
 **/build/
 **/out/
+node_modules/
+frontend/dist/
 Rating/rating_service/bin/
 *.class
 *.jar

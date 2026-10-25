@@ -12,6 +12,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -22,12 +26,17 @@ public class UserController {
     UserServ UserServ;
 
     @GetMapping("users")
-    public List<user> getAllUsers() {
-        return UserServ.getAllUsers();
+    public List<user> getAllUsers(@AuthenticationPrincipal Jwt jwt) {
+        try {
+            return List.of(UserServ.getUserById(jwt.getSubject()));
+        } catch (IllegalArgumentException exception) {
+            return List.of();
+        }
     }
     @PostMapping("adduser")
-    public ResponseEntity<String> addUser(@RequestBody user user) {
+    public ResponseEntity<String> addUser(@RequestBody user user, @AuthenticationPrincipal Jwt jwt) {
         try {
+            user.setUserid(jwt.getSubject());
             UserServ.addUser(user);
             return ResponseEntity.ok("User added successfully");
         } catch (IllegalArgumentException e) {
@@ -36,7 +45,10 @@ public class UserController {
     }
 
     @GetMapping("users/{userid}")
-    public ResponseEntity<UserWithRatingsResponse> getUserById(@PathVariable String userid) {
+    public ResponseEntity<UserWithRatingsResponse> getUserById(
+            @PathVariable String userid,
+            @AuthenticationPrincipal Jwt jwt) {
+        requireSelf(userid, jwt);
         try {
             return ResponseEntity.ok(UserServ.getUserWithRatings(userid));
         } catch (IllegalArgumentException e) {
@@ -45,7 +57,8 @@ public class UserController {
     }
 
     @DeleteMapping("users/{userid}")
-    public ResponseEntity<Void> deleteUser(@PathVariable String userid) {
+    public ResponseEntity<Void> deleteUser(@PathVariable String userid, @AuthenticationPrincipal Jwt jwt) {
+        requireSelf(userid, jwt);
         try {
             UserServ.deleteUser(userid);
             return ResponseEntity.noContent().build();
@@ -54,5 +67,10 @@ public class UserController {
         }
     }
 
+    private static void requireSelf(String userId, Jwt jwt) {
+        if (!jwt.getSubject().equals(userId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only access your own user profile");
+        }
+    }
 
 }

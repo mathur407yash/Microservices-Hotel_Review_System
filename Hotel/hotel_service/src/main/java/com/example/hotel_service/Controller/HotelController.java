@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 
 import java.util.List;
 
@@ -26,9 +28,16 @@ public class HotelController {
     }
 
     @PostMapping
-    public ResponseEntity<Hotel> createHotel(@RequestBody Hotel hotel) {
+    public ResponseEntity<Hotel> createHotel(
+            @RequestBody Hotel hotel,
+            @AuthenticationPrincipal Jwt jwt) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(hotelService.createHotel(hotel));
+                .body(hotelService.createHotel(hotel, jwt.getSubject()));
+    }
+
+    @GetMapping("/owned")
+    public ResponseEntity<List<Hotel>> getOwnedHotels(@AuthenticationPrincipal Jwt jwt) {
+        return ResponseEntity.ok(hotelService.getHotelsByOwnerSubject(jwt.getSubject()));
     }
 
     @GetMapping
@@ -54,8 +63,10 @@ public class HotelController {
     }
 
     @DeleteMapping("/{hotel_id}")
-    public ResponseEntity<Void> deleteHotelByHotelId(@PathVariable("hotel_id") String hotelId) {
-        hotelService.deleteHotelByHotelId(hotelId);
+    public ResponseEntity<Void> deleteHotelByHotelId(
+            @PathVariable("hotel_id") String hotelId,
+            @AuthenticationPrincipal Jwt jwt) {
+        hotelService.deleteHotelByHotelId(hotelId, jwt.getSubject());
         return ResponseEntity.noContent().build();
     }
 }

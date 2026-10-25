@@ -70,13 +70,14 @@ $env:GOOGLE_CLIENT_ID = "your-google-client-id"
 $env:GOOGLE_CLIENT_SECRET = "your-google-client-secret"
 ```
 
-Start Google sign-in by opening `http://localhost:8084/oauth2/authorization/google` in a browser. On successful sign-in, the callback responds with JSON containing `access_token`, `token_type`, and `expires_in`. Send the token in the `Authorization: Bearer <access_token>` header on API requests. For example:
+Run the React frontend and choose either the traveller or hotel-owner sign-in option. It starts Google sign-in in a popup with the selected role; the gateway returns the signed token to the opener using an origin-restricted `postMessage`. The frontend stores the 15-minute token in tab-scoped `sessionStorage` and sends it as a bearer token. For API smoke tests, copy the token from the frontend's `stayfolio.auth` session-storage entry into `$env:API_ACCESS_TOKEN` (never commit or share it):
 
 ```powershell
-$token = @{ access_token = "paste-the-access_token-from-the-Google-login-response" }
-$headers = @{ Authorization = "Bearer $($token.access_token)" }
-$env:API_ACCESS_TOKEN = $token.access_token
+$env:API_ACCESS_TOKEN = "paste-the-access-token-here"
+$headers = @{ Authorization = "Bearer $env:API_ACCESS_TOKEN" }
 ```
+
+The token carries the selected `USER` or `HOTEL_OWNER` role, enforced by the gateway and services. Users can browse hotels and create/delete their own reviews. Hotel owners can create and delete only hotels owned by their Google subject; hotel and review reads remain available to signed-in roles. The role selector is self-service for this sample, not proof of commercial ownership. Existing hotel rows are not automatically assigned an owner and cannot be managed through the new owner dashboard until ownership is verified and backfilled.
 
 The `/actuator/health` endpoint remains public for liveness checks on User and Hotel. Other actuator endpoints and all business endpoints require a valid JWT. The RSA public key, issuer, and audience are validated by each API service; do not commit OAuth credentials or the private key.
 
@@ -135,14 +136,31 @@ The Eureka dashboard is at `http://localhost:8761`. It should list `API-GATEWAY`
 
 Use the gateway base URL `http://localhost:8084` and attach the bearer token acquired above. The same routes are also available directly from each service at its port and require the same token.
 
+## React frontend
+
+The React/Vite frontend is in `frontend/` and runs at `http://localhost:5173`. It has separate Google sign-in choices for travellers and hotel owners. The selected account type is included in the signed JWT and enforced by the gateway and services. Hotel owners can manage only the hotels they created; travellers can browse hotels and post reviews under their Google identity.
+
+Start it from the repository root:
+
+```powershell
+Set-Location .\frontend
+npm install
+npm run dev
+```
+
+Google OAuth callbacks return to the gateway, which sends the access token to the opened frontend window using `postMessage` restricted to `FRONTEND_ORIGIN` (defaults to `http://localhost:5173`). The frontend keeps the short-lived token in tab-scoped `sessionStorage`; sign in again when it expires. Configure the Google OAuth client with `http://localhost:8084/login/oauth2/code/google` as its authorized redirect URI. After changing backend code or shared configuration, rebuild and restart the affected service before using the updated frontend.
+
+The hotel-owner choice is currently self-service for this sample. A real deployment should verify hotel ownership before enabling owner capabilities.
+
 | Method | Path | Description |
 | --- | --- | --- |
-| `GET` | `/users` | List users |
+| `GET` | `/users` | Get the signed-in user's profile |
 | `POST` | `/adduser` | Create a user |
 | `GET` | `/users/{userid}` | Get a user, their ratings, and hotel details for each rating |
 | `DELETE` | `/users/{userid}` | Delete a user |
 | `GET` | `/hotels` | List hotels |
 | `POST` | `/hotels` | Create a hotel |
+| `GET` | `/hotels/owned` | List hotels owned by the signed-in hotel owner |
 | `GET` | `/hotels/{hotel_id}` | Get a hotel and its ratings |
 | `GET` | `/hotels/{hotel_id}/details` | Get a hotel without ratings (internal service lookup) |
 | `DELETE` | `/hotels/{hotel_id}` | Delete a hotel |
@@ -162,21 +180,21 @@ $user = @{ userid = "USR-101"; name = "Jordan Lee"; email = "jordan.lee@example.
 Invoke-RestMethod -Uri http://localhost:8084/adduser -Method Post -ContentType 'application/json' -Body $user -Headers $headers
 ```
 
-Create a hotel:
+Create a hotel as a hotel owner (the service generates its ID):
 
 ```powershell
-$hotel = @{ hotel_id = "HTL-101"; name = "The Harbor House"; location = "Seattle"; about = "A fictional city hotel near the waterfront." } | ConvertTo-Json
-Invoke-RestMethod -Uri http://localhost:8084/hotels -Method Post -ContentType 'application/json' -Body $hotel -Headers $headers
+$hotel = @{ name = "The Harbor House"; location = "Seattle"; about = "A fictional city hotel near the waterfront." } | ConvertTo-Json
+$createdHotel = Invoke-RestMethod -Uri http://localhost:8084/hotels -Method Post -ContentType 'application/json' -Body $hotel -Headers $headers
 ```
 
-Create a rating linking that user and hotel:
+Create a rating as a traveller (the service assigns your Google subject and generates the review ID):
 
 ```powershell
-$rating = @{ ratingId = "REV-101"; hotelId = "HTL-101"; userid = "USR-101"; rating = 5; feedback = "Friendly service and a comfortable stay." } | ConvertTo-Json
+$rating = @{ hotelId = $createdHotel.hotel_id; rating = 5; feedback = "Friendly service and a comfortable stay." } | ConvertTo-Json
 Invoke-RestMethod -Uri http://localhost:8084/ratings -Method Post -ContentType 'application/json' -Body $rating -Headers $headers
 ```
 
-Then query `http://localhost:8084/users/USR-101` or `http://localhost:8084/hotels/HTL-101` with `-Headers $headers` to see the aggregated responses.
+Use `$createdHotel.hotel_id` to retrieve a hotel's detail and ratings. For `/users/{userid}`, use your Google subject (`sub` claim) rather than an ID supplied in the request body.
 
 ## Build
 

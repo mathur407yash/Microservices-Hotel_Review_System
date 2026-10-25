@@ -12,6 +12,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
@@ -20,6 +21,8 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
@@ -31,9 +34,24 @@ public class HotelSecurityConfiguration {
 				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.authorizeHttpRequests(authorize -> authorize
 						.requestMatchers("/actuator/health/**").permitAll()
+						.requestMatchers(HttpMethod.GET, "/hotels/owned").hasRole("HOTEL_OWNER")
+						.requestMatchers(HttpMethod.GET, "/hotels/**").hasAnyRole("USER", "HOTEL_OWNER")
+						.requestMatchers(HttpMethod.POST, "/hotels/**").hasRole("HOTEL_OWNER")
+						.requestMatchers(HttpMethod.DELETE, "/hotels/**").hasRole("HOTEL_OWNER")
 						.anyRequest().authenticated())
-				.oauth2ResourceServer(resourceServer -> resourceServer.jwt(jwt -> jwt.decoder(jwtDecoder)));
+				.oauth2ResourceServer(resourceServer -> resourceServer.jwt(jwt -> jwt
+						.decoder(jwtDecoder)
+						.jwtAuthenticationConverter(jwtAuthenticationConverter())));
 		return http.build();
+	}
+
+	private static JwtAuthenticationConverter jwtAuthenticationConverter() {
+		JwtGrantedAuthoritiesConverter authoritiesConverter = new JwtGrantedAuthoritiesConverter();
+		authoritiesConverter.setAuthoritiesClaimName("roles");
+		authoritiesConverter.setAuthorityPrefix("ROLE_");
+		JwtAuthenticationConverter authenticationConverter = new JwtAuthenticationConverter();
+		authenticationConverter.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
+		return authenticationConverter;
 	}
 
 	@Bean

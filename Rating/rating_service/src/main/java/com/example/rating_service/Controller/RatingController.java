@@ -11,6 +11,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -25,7 +28,10 @@ public class RatingController {
     }
 
     @PostMapping
-    public ResponseEntity<Rating> createRating(@RequestBody Rating rating) {
+    public ResponseEntity<Rating> createRating(
+            @RequestBody Rating rating,
+            @AuthenticationPrincipal Jwt jwt) {
+        rating.setUserid(jwt.getSubject());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ratingService.createRating(rating));
     }
@@ -36,7 +42,12 @@ public class RatingController {
     }
 
     @GetMapping("/user/{userid}")
-    public ResponseEntity<List<Rating>> getRatingsByUserid(@PathVariable String userid) {
+    public ResponseEntity<List<Rating>> getRatingsByUserid(
+            @PathVariable String userid,
+            @AuthenticationPrincipal Jwt jwt) {
+        if (!jwt.getSubject().equals(userid)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only view your own reviews");
+        }
         return ResponseEntity.ok(ratingService.getRatingsByUserid(userid));
     }
 
@@ -51,7 +62,13 @@ public class RatingController {
     }
 
     @DeleteMapping("/{ratingId}")
-    public ResponseEntity<Void> deleteRatingByRatingId(@PathVariable String ratingId) {
+    public ResponseEntity<Void> deleteRatingByRatingId(
+            @PathVariable String ratingId,
+            @AuthenticationPrincipal Jwt jwt) {
+        Rating rating = ratingService.getRatingByRatingId(ratingId);
+        if (!jwt.getSubject().equals(rating.getUserid())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only delete your own reviews");
+        }
         ratingService.deleteRatingByRatingId(ratingId);
         return ResponseEntity.noContent().build();
     }
